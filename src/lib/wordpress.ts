@@ -1,12 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
-import { Database } from "../types/supabase";
-
-// Initialize Supabase client
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
-
 export interface WordPressCredentials {
   username: string;
   password: string;
@@ -29,12 +20,10 @@ export interface WordPressUser {
   avatar: string;
 }
 
-// Store WordPress credentials in Supabase
+// Store WordPress credentials in localStorage
 export const storeWordPressCredentials = async (
   credentials: WordPressCredentials,
 ) => {
-  // Instead of trying to use Supabase auth, we'll store credentials locally
-  // This is a temporary solution for demo purposes
   const wordpressData = {
     username: credentials.username,
     site_url: credentials.siteUrl || "",

@@ -57,17 +57,13 @@ const Home = ({}: HomeProps) => {
     }
   };
 
-  const handleLogin = async (username: string, password: string) => {
+  const handleLogin = async (
+    username: string,
+    password: string,
+    siteUrl: string,
+  ) => {
     setIsLoading(true);
     try {
-      // Get the site URL from the input field
-      const storedCredentials = localStorage.getItem("wordpress_credentials");
-      let siteUrl = "";
-      if (storedCredentials) {
-        const { site_url } = JSON.parse(storedCredentials);
-        siteUrl = site_url;
-      }
-
       const userData = await authenticateWithWordPress({
         username,
         password,
@@ -215,7 +211,17 @@ const Home = ({}: HomeProps) => {
           {isAuthenticated ? (
             selectedImage ? (
               <ImageEditor
-                selectedImage={selectedImage}
+                selectedImage={
+                  selectedImage && selectedImage.width && selectedImage.height
+                    ? (selectedImage as {
+                        id: string;
+                        url: string;
+                        title: string;
+                        width: number;
+                        height: number;
+                      })
+                    : undefined
+                }
                 onSave={handleSaveImage}
               />
             ) : (
@@ -251,10 +257,6 @@ const Home = ({}: HomeProps) => {
                   alt="WordPress connection"
                   className="rounded-md mx-auto mb-4"
                 />
-                <Button onClick={handleLogin} className="mt-2">
-                  <User className="h-4 w-4 mr-2" />
-                  Login with WordPress
-                </Button>
               </Card>
             </div>
           )}

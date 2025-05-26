@@ -32,7 +32,7 @@ interface MediaSidebarProps {
   isAuthenticated?: boolean;
   isLoading?: boolean;
   mediaItems?: WordPressMedia[];
-  onLogin?: (username: string, password: string) => void;
+  onLogin?: (username: string, password: string, siteUrl: string) => void;
   onImageSelect?: (media: WordPressMedia) => void;
   onMediaDelete?: (mediaId: string) => void;
 }
@@ -84,8 +84,7 @@ const MediaSidebar = ({
       ) {
         formattedUrl = "https://" + formattedUrl;
       }
-
-      onLogin(username, password);
+      onLogin(username, password, formattedUrl);
       setSiteUrl(formattedUrl);
     }
   };
@@ -183,7 +182,7 @@ const MediaSidebar = ({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => onLogin(username, password)}
+                        onClick={() => onLogin(username, password, siteUrl)}
                       >
                         Retry Connection
                       </Button>
