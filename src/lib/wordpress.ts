@@ -106,7 +106,7 @@ export const fetchWordPressMedia = async (): Promise<WordPressMedia[]> => {
     const authHeader = `Basic ${btoa(`${username}:${password}`)}`;
 
     // Fetch media from WordPress REST API
-    const response = await fetch(`${baseUrl}/wp-json/wp/v2/media?per_page=20`, {
+    const response = await fetch(`${baseUrl}/wp-json/wp/v2/media?per_page=100`, {
       headers: {
         Authorization: authHeader,
       },
