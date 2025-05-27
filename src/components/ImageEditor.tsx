@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -65,50 +65,100 @@ const ImageEditor = ({
   });
   const [isCropping, setIsCropping] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [imageObj, setImageObj] = useState<HTMLImageElement | null>(null);
+  const [crop, setCrop] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+
+  useEffect(() => {
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.src = selectedImage.url;
+    img.onload = () => setImageObj(img);
+  }, [selectedImage.url]);
+
+  useEffect(() => {
+    if (!imageObj || !canvasRef.current) return;
+    const ctx = canvasRef.current.getContext("2d");
+    if (!ctx) return;
+    // Apply cropping if set
+    let sx = 0, sy = 0, sw = imageObj.width, sh = imageObj.height;
+    if (crop) {
+      sx = crop.x; sy = crop.y; sw = crop.w; sh = crop.h;
+    }
+    canvasRef.current.width = sw;
+    canvasRef.current.height = sh;
+    ctx.filter = `brightness(${filters.brightness}%) contrast(${filters.contrast}%) saturate(${filters.saturation}%) blur(${filters.blur / 10}px)`;
+    ctx.drawImage(imageObj, sx, sy, sw, sh, 0, 0, sw, sh);
+  }, [imageObj, filters, crop]);
+
+  // Crop logic: click and drag to select crop area
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [dragEnd, setDragEnd] = useState<{ x: number; y: number } | null>(null);
+
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    if (!isCropping || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    setDragStart({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    setDragEnd(null);
+  };
+  const handleCanvasMouseMove = (e: React.MouseEvent) => {
+    if (!isCropping || !dragStart || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    setDragEnd({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
+  const handleCanvasMouseUp = () => {
+    if (!isCropping || !dragStart || !dragEnd) return;
+    const x = Math.min(dragStart.x, dragEnd.x);
+    const y = Math.min(dragStart.y, dragEnd.y);
+    const w = Math.abs(dragEnd.x - dragStart.x);
+    const h = Math.abs(dragEnd.y - dragStart.y);
+    setCrop({ x, y, w, h });
+    setIsCropping(false);
+    setDragStart(null);
+    setDragEnd(null);
+  };
+  const handleResetCrop = () => setCrop(null);
+
+  // Save logic: export canvas as dataUrl
+  const handleSave = (saveAsNew: boolean) => {
+    if (!canvasRef.current) return;
+    const dataUrl = canvasRef.current.toDataURL("image/jpeg");
+    onSave({
+      id: selectedImage.id,
+      title: selectedImage.title,
+      dataUrl,
+      width: canvasRef.current.width,
+      height: canvasRef.current.height,
+      type: "image/jpeg",
+    }, saveAsNew);
+  };
 
   const handleWidthChange = (newWidth: number) => {
     setWidth(newWidth);
     if (maintainAspectRatio) {
-      const aspectRatio = selectedImage.width / selectedImage.height;
-      setHeight(Math.round(newWidth / aspectRatio));
+      setHeight(Math.round((newWidth / selectedImage.width) * selectedImage.height));
     }
   };
 
   const handleHeightChange = (newHeight: number) => {
     setHeight(newHeight);
     if (maintainAspectRatio) {
-      const aspectRatio = selectedImage.width / selectedImage.height;
-      setWidth(Math.round(newHeight * aspectRatio));
+      setWidth(Math.round((newHeight / selectedImage.height) * selectedImage.width));
     }
-  };
-
-  const handleFilterChange = (
-    filterName: keyof typeof filters,
-    value: number,
-  ) => {
-    setFilters((prev) => ({
-      ...prev,
-      [filterName]: value,
-    }));
   };
 
   const handleRemoveBackground = () => {
     setIsProcessing(true);
-    // Simulate background removal processing
+    // Simulate background removal process
     setTimeout(() => {
       setIsProcessing(false);
+      // Here you would typically call an API to remove the background
+      // and then update the image object with the new image data
     }, 2000);
   };
 
-  const handleSave = (saveAsNew: boolean) => {
-    const imageData = {
-      id: selectedImage.id,
-      width,
-      height,
-      filters,
-      // Other edited properties
-    };
-    onSave(imageData, saveAsNew);
+  const handleFilterChange = (filter: string, value: number) => {
+    setFilters((prev) => ({ ...prev, [filter]: value }));
   };
 
   const filterStyle = {
@@ -129,24 +179,36 @@ const ImageEditor = ({
         <div className="flex-1 flex items-center justify-center overflow-auto p-4 bg-gray-100 dark:bg-gray-900">
           {selectedImage ? (
             <div className="relative">
-              <div
-                className="border border-border shadow-lg"
+              <canvas
+                ref={canvasRef}
                 style={{
-                  transform: `scale(${zoom / 100})`,
-                  transition: "transform 0.2s",
+                  maxWidth: "100%",
+                  cursor: isCropping ? "crosshair" : "default",
+                  border: "1px solid #ccc",
                 }}
-              >
-                <img
-                  src={selectedImage.url}
-                  alt={selectedImage.title}
-                  style={filterStyle}
-                  className={`max-w-full ${isCropping ? "cursor-crosshair" : ""}`}
-                />
-              </div>
+                width={crop ? crop.w : selectedImage.width}
+                height={crop ? crop.h : selectedImage.height}
+                onMouseDown={handleCanvasMouseDown}
+                onMouseMove={handleCanvasMouseMove}
+                onMouseUp={handleCanvasMouseUp}
+              />
               {isProcessing && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white">
                   Processing...
                 </div>
+              )}
+              {isCropping && dragStart && dragEnd && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: Math.min(dragStart.x, dragEnd.x),
+                    top: Math.min(dragStart.y, dragEnd.y),
+                    width: Math.abs(dragEnd.x - dragStart.x),
+                    height: Math.abs(dragEnd.y - dragStart.y),
+                    border: "2px dashed #007bff",
+                    pointerEvents: "none",
+                  }}
+                />
               )}
             </div>
           ) : (
@@ -209,9 +271,7 @@ const ImageEditor = ({
                     id="width"
                     type="number"
                     value={width}
-                    onChange={(e) =>
-                      handleWidthChange(parseInt(e.target.value) || 0)
-                    }
+                    onChange={(e) => handleWidthChange(parseInt(e.target.value) || 0)}
                   />
                 </div>
                 <div className="space-y-2">
@@ -220,9 +280,7 @@ const ImageEditor = ({
                     id="height"
                     type="number"
                     value={height}
-                    onChange={(e) =>
-                      handleHeightChange(parseInt(e.target.value) || 0)
-                    }
+                    onChange={(e) => handleHeightChange(parseInt(e.target.value) || 0)}
                   />
                 </div>
                 <div className="flex items-center space-x-2">
@@ -244,17 +302,18 @@ const ImageEditor = ({
                   <Crop className="mr-2 h-4 w-4" />
                   {isCropping ? "Cancel Crop" : "Start Cropping"}
                 </Button>
-
                 {isCropping && (
                   <div className="space-y-4 mt-4">
                     <p className="text-sm text-muted-foreground">
                       Draw on the image to select crop area
                     </p>
                     <div className="grid grid-cols-2 gap-2">
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={handleResetCrop}>
                         Reset
                       </Button>
-                      <Button size="sm">Apply Crop</Button>
+                      <Button size="sm" onClick={() => setIsCropping(false)}>
+                        Apply Crop
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -287,9 +346,7 @@ const ImageEditor = ({
                       max={200}
                       step={1}
                       value={[filters.brightness]}
-                      onValueChange={(value) =>
-                        handleFilterChange("brightness", value[0])
-                      }
+                      onValueChange={(value) => handleFilterChange("brightness", value[0])}
                     />
                   </div>
 
@@ -304,9 +361,7 @@ const ImageEditor = ({
                       max={200}
                       step={1}
                       value={[filters.contrast]}
-                      onValueChange={(value) =>
-                        handleFilterChange("contrast", value[0])
-                      }
+                      onValueChange={(value) => handleFilterChange("contrast", value[0])}
                     />
                   </div>
 
@@ -321,9 +376,7 @@ const ImageEditor = ({
                       max={200}
                       step={1}
                       value={[filters.saturation]}
-                      onValueChange={(value) =>
-                        handleFilterChange("saturation", value[0])
-                      }
+                      onValueChange={(value) => handleFilterChange("saturation", value[0])}
                     />
                   </div>
 
@@ -338,9 +391,7 @@ const ImageEditor = ({
                       max={20}
                       step={0.5}
                       value={[filters.blur]}
-                      onValueChange={(value) =>
-                        handleFilterChange("blur", value[0])
-                      }
+                      onValueChange={(value) => handleFilterChange("blur", value[0])}
                     />
                   </div>
                 </div>
